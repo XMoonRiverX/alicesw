@@ -1,7 +1,7 @@
 {
-  "name": "小说爬虫工具",
-  "short_name": "小说爬虫",
-  "description": "从爱丽丝书屋下载小说的工具",
+  "name": "Novel Spider Tool",
+  "short_name": "Novel Spider",
+  "description": "Download novels from Alice's Library",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

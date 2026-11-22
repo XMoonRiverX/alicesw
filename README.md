@@ -1,103 +1,145 @@
-# 爱丽丝书屋全站小说一键爬取器 🚀💦
+# Alice's Library Novel Downloader
 
-**专为爱丽丝书屋 (alicesw.org / alicesw.com / alicesw.click 等域名) 量身定制的异步小说批量下载神器**
+A Python toolkit for searching and downloading novels from Alice's Library (ALICESW.COM), with command-line, desktop GUI, web, and Chrome extension interfaces.
 
-爱丽丝书屋——那个标签齐全、重口不阉割、绿帽NTR凌辱调教样样齐全的成人幻想小说天堂，现在你可以用Python几分钟就把整个书库扒到本地硬盘里，离线慢慢“研究”。
+The source interfaces and documentation are in English. Novel titles, author names, search keywords, and downloaded chapter content remain in their original language. Website-specific selectors and parsing patterns are also preserved.
 
-**核心亮点（为什么值得star）**
+## Features
 
-- 全异步 + 并发控制 → 爬几千章小说速度飞起，不卡不崩
-- 智能正文提取 → 适配爱丽丝书屋最新页面结构（2026年3月验证通过）
-- 支持登录态 → 带上cookie就能下需要权限的限制级内容
-- 自动章节排序 + 文件名序号 → 书架整齐得像Kindle导入一样
-- 防反爬友好 → 随机UA + 代理支持 + 重试机制 + 指数退避
-- 标签/分类/排行一键爬 → 想只扒“绿帽”“媚黑”“时间停止”专区？一行命令搞定
+- Search by title, author, tag, or keyword.
+- Retrieve chapter lists and extract chapter text.
+- Download selected novels or an entire set of search results using the batch interface.
+- Save an entire novel to one text file or save each chapter separately.
+- Use the desktop GUI to search, download, and manage downloaded files.
 
-**适用人群**
+## Requirements
 
-- 硬盘党：不想每次都开浏览器翻几十页点下一章
-- 研究党：想批量分析爱丽丝书屋的“创作趋势”（笑）
-- 离线党：机场/地铁/断网环境也要继续“学习”
-- 开源贡献者：想帮这个项目适配更多成人小说站的欢迎pr
-
-**快速使用**
-dist\小说爬虫工具\_批量版.exe，直接下载使用即可
-
-# 小说爬虫工具
-
-这是一个基于Python的小说爬虫工具，可以从爱丽丝书屋 (ALICESW.COM) 网站爬取小说内容。
-
-## 功能特性
-
-- 支持多种搜索方式：按标题、作者、标签或模糊搜索
-- 自动获取小说的所有章节
-- 提取章节内容并保持格式
-- 支持保存到本地文件
-
-## 依赖库
-
-- requests
-- beautifulsoup4
-- lxml
-
-## 安装依赖
+- Python 3
+- `requests`
+- `beautifulsoup4`
+- `lxml`
+- `flask` (web interface only)
+- Tkinter (desktop GUI only; included with many Python installations)
 
 ```bash
 pip install requests beautifulsoup4 lxml
 ```
 
-## 使用方法
+For the web interface, also install Flask:
 
-### 1. 交互式使用
+```bash
+pip install flask
+```
 
-运行主程序：
+## Usage
+
+### Interactive command line
 
 ```bash
 python novel_spider.py
 ```
 
-按照提示选择搜索类型和输入关键词。
+Choose a search type and enter a keyword when prompted. Search keywords must match the website's content, which is primarily Chinese.
 
-### 2. 编程方式使用
+### Batch downloads
+
+```bash
+python spider_batch.py
+```
+
+Search for novels, choose which results to download, and select either a single text file per novel or a separate file for each chapter. Files are saved under `downloads` next to the script.
+
+### Download by URL
+
+```bash
+python download_by_url.py "https://www.alicesw.com/novel/123.html"
+python download_by_url.py "https://www.alicesw.com/novel/123.html" --format chapter
+```
+
+Replace the example URL with an actual novel or chapter-list URL. Use `--title` or `--author` to override the detected metadata.
+
+### Desktop GUI
+
+```bash
+python spider_simple_gui.py
+```
+
+### Web interface
+
+```bash
+python web_spider.py
+```
+
+The web interface expects `templates/index.html` and supporting assets, which are not included in this checkout. Likewise, the Chrome extension references a `popup.html` file that is not included. See [the extension README](novel-spider-extension/README.md) for details.
+
+### Prebuilt applications
+
+The `dist` directory contains the original Windows executable (`小说爬虫工具_批量版.exe`) and Android package (`app-debug.apk`). These existing binaries have not been rebuilt or translated; run the Python scripts to use the English interfaces.
+
+### Python API
 
 ```python
 from novel_spider import NovelSpider
 
 spider = NovelSpider()
 
-# 搜索小说
-novels = spider.search_novels("女友", "_all")
-print(f"找到 {len(novels)} 本小说")
+novels = spider.search_novels("example", "_all")
+print(f"Found {len(novels)} novels")
 
-# 获取小说章节
 if novels:
-    chapters = spider.get_novel_chapters(novels[0]['url'])
-    print(f"找到 {len(chapters)} 个章节")
+    chapters = spider.get_novel_chapters(novels[0]["url"])
+    print(f"Found {len(chapters)} chapters")
 
-    # 获取章节内容
     if chapters:
-        content = spider.get_chapter_content(chapters[0]['url'])
-        print(f"内容长度: {len(content)} 字符")
+        content = spider.get_chapter_content(chapters[0]["url"])
+        print(f"Content length: {len(content)} characters")
 ```
 
-## 主要类和方法
+Replace `example` with a keyword found on the website.
 
-- `NovelSpider`: 主爬虫类
-  - `search_novels(keyword, search_type)`: 搜索小说
-  - `get_novel_chapters(novel_url)`: 获取小说章节列表
-  - `get_chapter_content(chapter_url)`: 获取章节内容
-  - `get_novel_content_by_search(keyword, search_type)`: 一键搜索并获取小说内容
-  - `save_novel_to_file(novel_data, filename)`: 保存小说到文件
+## Search Result Metadata
 
-## 注意事项
+All Python search interfaces return the following fields for each novel:
 
-1. 请合理使用，避免请求过于频繁
-2. 请遵守网站的robots.txt协议和相关法律法规
-3. 本工具仅供学习交流使用，请勿用于商业用途
-4. 网站内容版权归原作者所有
+| Field | HTML source / meaning |
+| --- | --- |
+| `title` | Text of the title link inside `h5` |
+| `url` | Absolute URL of that title link |
+| `author` | Link with the query parameter `f=author` |
+| `intro` | Full text of `.content-txt`, without the previous 100-character limit |
+| `status` | Muted status inside the heading, without surrounding brackets |
+| `word_count` | Value labeled `字數` or `字数` in muted text |
+| `views` | Value labeled `瀏覽` or `浏览` in muted text |
+| `tags` | Tag names from links with `f=tag`, without leading `#` |
+| `text_muted` | List of normalized text from every `.text-muted` element |
+| `published_at` | Publication time labeled `發布時間` or `发布时间` in `.timedesc` |
+| `updated_at` | Latest update time labeled `更新時間` or `更新时间` in `.timedesc` |
 
-## 工作流程
+Missing text fields are empty strings; missing lists are empty lists. Counts retain their original units (for example, `496.10萬`), and timestamps retain the website's displayed format without assuming a timezone.
 
-1. 搜索阶段：访问 `https://www.alicesw.com/search.html?q={keyword}&f={type}`
-2. 详情页：获取小说章节列表
-3. 内容页：提取 `<div class="read-content j_readContent user_ad_content">` 中的内容
+Search-based CLI and GUI downloads preserve this metadata. New text exports and `novel_info.txt` files include the description, status, counts, tags, and timestamps when available. Existing downloaded files are not rewritten.
+
+For direct URL downloads, these fields are extracted when the supplied page contains the same metadata elements. The web `/download` endpoint optionally accepts a `novel_metadata` array of search result records aligned with `novel_urls` to preserve metadata from the search page.
+
+## Main Class and Methods
+
+- `NovelSpider`: main crawler class.
+- `search_novels(keyword, search_type)`: search for novels.
+- `get_novel_chapters(novel_url)`: retrieve a novel's chapter list.
+- `get_chapter_content(chapter_url)`: extract chapter text.
+- `get_novel_content_by_search(keyword, search_type)`: search and retrieve the first matching novel.
+- `save_novel_to_file(novel_data, filename)`: save a novel to a text file.
+
+## How It Works
+
+1. Search using `https://www.alicesw.com/search.html?q={keyword}&f={type}`.
+2. Retrieve the novel's chapter list from its chapter-list or detail page.
+3. Extract text from the `read-content` container, with fallback selectors where supported.
+
+## Responsible Use
+
+1. Avoid excessive requests and respect the website's rate limits.
+2. Follow the website's `robots.txt`, terms of use, and applicable laws.
+3. This tool is intended for learning and research, not commercial use.
+4. Copyright in downloaded content remains with the original authors.
+5. The target website contains adult content; access it only if you meet the applicable age requirements.

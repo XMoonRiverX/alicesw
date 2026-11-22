@@ -1,60 +1,60 @@
 // background.js
 
-// 监听消息
+// Listen for messages
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === 'downloadNovels') {
         downloadNovels(request.novels).then(success => {
             sendResponse({success: success});
         });
-        return true; // 异步响应
+        return true; // Respond asynchronously
     }
 });
 
-// 下载小说
+// Download novels
 async function downloadNovels(novels) {
     for (const novel of novels) {
         try {
-            // 根据不同的网站使用不同的爬取逻辑
+            // Use site-specific extraction logic
             if (novel.source === 'alicesw') {
                 await downloadAliceNovel(novel);
             }
         } catch (error) {
-            console.error('下载小说失败:', error);
+            console.error('Failed to download novel:', error);
             return false;
         }
     }
     return true;
 }
 
-// 下载爱丽丝书屋的小说
+// Download novels from Alice Library
 async function downloadAliceNovel(novel) {
     return new Promise(async (resolve, reject) => {
         try {
-            // 爬取小说内容
+            // Extract novel content
             const novelContent = await crawlNovelContent(novel.url);
             
-            // 创建文件内容
-            let content = `小说标题：${novel.title}\n`;
-            content += `作者：${novel.author}\n`;
-            content += `网址：${novel.url}\n`;
+            // Build the file contents
+            let content = `Novel title: ${novel.title}\n`;
+            content += `Author: ${novel.author}\n`;
+            content += `URL: ${novel.url}\n`;
             content += '='.repeat(50) + '\n\n';
             
-            for (const chapter of novelContent.chapters) {
-                content += `章节：${chapter.title}\n`;
+            for (const [chapterIndex, chapter] of novelContent.chapters.entries()) {
+                content += `Chapter ${chapterIndex + 1}: ${chapter.title}\n`;
                 content += '-'.repeat(30) + '\n';
                 content += chapter.content + '\n\n';
             }
             
-            // 清理文件名
+            // Sanitize the filename
             const cleanTitle = novel.title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
             const filename = `${cleanTitle}.txt`;
             
-            // 使用data URL下载
+            // Download using a data URL
             const encoder = new TextEncoder();
             const data = encoder.encode(content);
             const blob = new Blob([data], {type: 'text/plain;charset=utf-8'});
             
-            // 使用FileReader读取blob并创建data URL
+            // Read the blob with FileReader and create a data URL
             const reader = new FileReader();
             reader.onload = function(e) {
                 const dataUrl = e.target.result;
@@ -67,12 +67,12 @@ async function downloadAliceNovel(novel) {
                     if (downloadId) {
                         resolve(true);
                     } else {
-                        reject(new Error('下载失败'));
+                        reject(new Error('Download failed'));
                     }
                 });
             };
             reader.onerror = function() {
-                reject(new Error('创建文件失败'));
+                reject(new Error('Failed to create file'));
             };
             reader.readAsDataURL(blob);
         } catch (error) {
@@ -81,10 +81,10 @@ async function downloadAliceNovel(novel) {
     });
 }
 
-// 爬取小说内容
+// Extract novel content
 async function crawlNovelContent(url) {
     return new Promise((resolve, reject) => {
-        // 从小说URL提取ID，构建章节列表页面URL
+        // Extract the novel ID and build the chapter-list page URL
         let chaptersUrl = url;
         const novelIdMatch = url.match(/\/novel\/(\d+)\.html/);
         if (novelIdMatch) {
@@ -92,15 +92,15 @@ async function crawlNovelContent(url) {
             chaptersUrl = `https://www.alicesw.com/other/chapters/id/${novelId}.html`;
         }
         
-        console.log(`章节列表页面: ${chaptersUrl}`);
+        console.log(`Chapter-list page: ${chaptersUrl}`);
         
         fetch(chaptersUrl)
             .then(response => response.text())
             .then(html => {
-                // 提取章节列表 - 模拟 .mulu_list li a 选择器
+                // Extract chapters using the equivalent of the .mulu_list li a selector
                 const chapters = [];
                 
-                // 优先从章节列表页面提取，使用更精确的正则表达式匹配 .mulu_list li a
+                // Prefer the chapter-list page with a more precise pattern for .mulu_list li a
                 const muluListRegex = /<div\s+class="mulu_list"[^>]*>([\s\S]*?)<\/div>/;
                 const muluMatch = html.match(muluListRegex);
                 
@@ -122,10 +122,10 @@ async function crawlNovelContent(url) {
                     }
                 }
                 
-                // 如果章节列表页面没有找到，尝试从原始页面获取
+                // Fall back to the original page if the chapter-list page has no chapters
                 if (chapters.length === 0) {
-                    console.log('从原始页面提取章节');
-                    // 尝试多种方式提取章节
+                    console.log('Extract chapters from the original page');
+                    // Try alternative chapter extraction methods
                     const chapterRegexes = [
                         /<li[^>]*><a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a><\/li>/g,
                         /<a[^>]+href="([^"\s]+\/book\/[^"\s]+)"[^>]*>([^<]+)<\/a>/g
@@ -147,59 +147,59 @@ async function crawlNovelContent(url) {
                     });
                 }
                 
-                console.log(`找到 ${chapters.length} 个章节`);
+                console.log(`Found ${chapters.length} chapters`);
                 
-                // 为每个章节获取内容
+                // Retrieve content for each chapter
                 const chapterPromises = chapters.map(chapter => {
                     return fetch(chapter.url)
                         .then(response => response.text())
                         .then(chapterHtml => {
-                            // 提取章节内容，参考Python实现的逻辑
+                            // Extract chapter content using the same approach as the Python implementation
                             let content = '';
                             
-                            // 尝试匹配 read-content class
+                            // Try matching the read-content class
                             let contentMatch = chapterHtml.match(/<div\s+class="read-content"[^>]*>([\s\S]*?)<\/div>/);
                             
-                            // 如果没有找到，尝试匹配包含 read 和 content 的 class
+                            // Fall back to classes containing both read and content
                             if (!contentMatch) {
                                 contentMatch = chapterHtml.match(/<div\s+class="[^"]*read[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/);
                             }
                             
-                            // 如果还是没有找到，尝试匹配其他可能的内容容器
+                            // Try other possible content containers as a final fallback
                             if (!contentMatch) {
                                 contentMatch = chapterHtml.match(/<div\s+class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/);
                             }
                             
                             if (contentMatch && contentMatch[1]) {
-                                // 移除不需要的元素（script、style、广告等）
+                                // Remove unwanted elements such as scripts, styles, and ads
                                 let contentHtml = contentMatch[1];
-                                // 移除 script 标签
+                                // Remove script tags
                                 contentHtml = contentHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
-                                // 移除 style 标签
+                                // Remove style tags
                                 contentHtml = contentHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
-                                // 移除广告标签
+                                // Remove ad elements
                                 contentHtml = contentHtml.replace(/<div[^>]*class="[^"]*ad[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
                                 contentHtml = contentHtml.replace(/<p[^>]*class="[^"]*ad[^"]*"[^>]*>[\s\S]*?<\/p>/g, '');
                                 contentHtml = contentHtml.replace(/<span[^>]*class="[^"]*ad[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
-                                // 移除所有HTML标签
+                                // Remove all HTML tags
                                 content = contentHtml.replace(/<[^>]+>/g, '').trim();
-                                // 替换多个换行符为单个换行符
+                                // Collapse consecutive newlines
                                 content = content.replace(/\n+/g, '\n');
-                                // 移除首尾空白
+                                // Trim leading and trailing whitespace
                                 content = content.trim();
                             } else {
-                                // 尝试直接从页面中提取文本内容
+                                // Try extracting text directly from the page
                                 const textMatch = chapterHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/);
                                 if (textMatch) {
                                     let textContent = textMatch[1];
-                                    // 移除HTML标签
+                                    // Remove HTML tags
                                     textContent = textContent.replace(/<[^>]+>/g, '').trim();
-                                    // 替换多个换行符为单个换行符
+                                    // Collapse consecutive newlines
                                     textContent = textContent.replace(/\n+/g, '\n');
-                                    // 提取合理长度的内容
-                                    content = textContent.substring(0, 10000) || '未能找到章节内容';
+                                    // Limit the extracted content length
+                                    content = textContent.substring(0, 10000) || 'Chapter content not found';
                                 } else {
-                                    content = '未能找到章节内容';
+                                    content = 'Chapter content not found';
                                 }
                             }
                             
@@ -209,10 +209,10 @@ async function crawlNovelContent(url) {
                             };
                         })
                         .catch(error => {
-                            console.error(`获取章节内容失败: ${chapter.title}`, error);
+                            console.error(`Failed to retrieve chapter content: ${chapter.title}`, error);
                             return {
                                 title: chapter.title,
-                                content: '获取内容失败'
+                                content: 'Failed to retrieve content'
                             };
                         });
                 });

@@ -1,10 +1,11 @@
 """
-爱丽丝书屋小说爬虫 - 简化版GUI
+Alice Library Novel Spider - Simple GUI
 """
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import requests
 from bs4 import BeautifulSoup
+from novel_metadata import extract_novel_metadata, format_novel_metadata, parse_search_result
 import urllib.parse
 import time
 import re
@@ -28,7 +29,7 @@ class NovelSpider:
         })
 
     def search_novels(self, keyword, search_type='_all'):
-        """搜索小说"""
+        """Search for novels"""
         if search_type == 'tag':
             search_url = f"{self.base_url}/search.html?q={urllib.parse.quote(keyword)}&f=tag"
         elif search_type == 'author':
@@ -45,49 +46,33 @@ class NovelSpider:
             list_items = soup.find_all('div', class_='list-group-item')
             
             for item in list_items:
-                title_elem = item.find('h5').find('a')
-                if title_elem:
-                    title = title_elem.get_text(strip=True)
-                    url = urllib.parse.urljoin(self.base_url, title_elem.get('href'))
-                    
-                    # 提取作者
-                    author_elem = item.find('a', href=re.compile(r'/search\?q=.*&f=author'))
-                    author = author_elem.get_text(strip=True) if author_elem else ""
-                    
-                    # 提取简介
-                    intro_elem = item.find('p', class_='content-txt')
-                    intro = intro_elem.get_text(strip=True)[:100] if intro_elem else ""  # 只取前100个字符
-                    
-                    novels.append({
-                        'title': title,
-                        'url': url,
-                        'author': author,
-                        'intro': intro
-                    })
+                novel = parse_search_result(item, self.base_url)
+                if novel:
+                    novels.append(novel)
             
             return novels
         except Exception as e:
-            print(f"搜索小说时出错: {e}")
+            print(f"Error searching for novels: {e}")
             return []
 
     def get_novel_chapters(self, novel_url):
-        """获取小说的所有章节"""
+        """Retrieve all chapters of a novel"""
         try:
-            # 从novel_url提取小说ID
+            # Extract the novel ID from novel_url
             novel_id_match = re.search(r'/novel/(\d+)\.html', novel_url)
             if novel_id_match:
                 novel_id = novel_id_match.group(1)
-                # 使用章节列表页面URL
+                # Use the chapter-list page URL
                 chapters_url = f"{self.base_url}/other/chapters/id/{novel_id}.html"
             else:
-                # 如果无法提取ID，则使用原来的URL
+                # Use the original URL if the ID cannot be extracted
                 chapters_url = novel_url
 
             response = self.session.get(chapters_url)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 从章节列表页面获取所有章节 - 使用正确的选择器
+            # Retrieve all chapters using the chapter-list page selector
             chapter_links = []
             chapter_elements = soup.select('.mulu_list li a')
             
@@ -99,7 +84,7 @@ class NovelSpider:
                     'url': url
                 })
             
-            # 如果在章节列表页面没有找到章节，尝试从原始小说页面获取
+            # Fall back to the original novel page if the chapter-list page has no chapters
             if not chapter_links:
                 response = self.session.get(novel_url)
                 response.encoding = 'utf-8'
@@ -116,58 +101,60 @@ class NovelSpider:
             
             return chapter_links
         except Exception as e:
-            print(f"获取小说章节时出错: {e}")
+            print(f"Error retrieving chapters: {e}")
             return []
 
     def get_chapter_content(self, chapter_url):
-        """获取章节内容"""
+        """Retrieve chapter content"""
         try:
             response = self.session.get(chapter_url)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 查找内容区域
+            # Find the content container
             content_div = soup.find('div', class_='read-content')
             if not content_div:
-                # 尝试其他可能的选择器
+                # Try alternative selectors
                 content_div = soup.find('div', {'class': re.compile(r'.*read.*content.*')})
             
             if content_div:
-                # 清理内容，移除不需要的标签
+                # Clean up the content by removing unwanted tags
                 for unwanted in content_div(["script", "style", "div.ad", "p.ad", "span.ad"]):
                     unwanted.decompose()
                 
                 content = content_div.get_text(separator='\n', strip=True)
                 return content
             else:
-                return "未能找到章节内容"
+                return "Chapter content not found"
         except Exception as e:
-            print(f"获取章节内容时出错: {e}")
+            print(f"Error retrieving chapter content: {e}")
             return ""
 
-    def get_novel_content_by_url(self, novel_url, novel_title=None, novel_author=None):
-        """通过URL获取小说内容"""
+    def get_novel_content_by_url(self, novel_url, novel_title=None, novel_author=None, metadata=None):
+        """Retrieve novel content by URL"""
         try:
-            # 如果没有提供标题，从页面获取
-            if not novel_title or not novel_author:
+            novel_metadata = dict(metadata or {})
+            novel_title = novel_title or novel_metadata.get('title')
+            novel_author = novel_author or novel_metadata.get('author')
+            if metadata is None or not novel_title or not novel_author:
                 response = self.session.get(novel_url)
                 response.encoding = 'utf-8'
                 soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # 尝试获取标题和作者
+                for key, value in extract_novel_metadata(soup).items():
+                    if not novel_metadata.get(key):
+                        novel_metadata[key] = value
+
                 if not novel_title:
                     title_elem = soup.find('div', class_='novel_title')
-                    novel_title = title_elem.get_text(strip=True) if title_elem else "未知标题"
-                
+                    novel_title = title_elem.get_text(strip=True) if title_elem else "Unknown Title"
+
                 if not novel_author:
-                    author_elem = soup.find('a', href=re.compile(r'/search.html\?q=.*&f=author'))
-                    novel_author = author_elem.get_text(strip=True) if author_elem else "未知作者"
-            
-            # 获取章节
+                    novel_author = novel_metadata.get('author') or "Unknown Author"
             chapters = self.get_novel_chapters(novel_url)
             
-            # 获取每章内容
+            # Retrieve content for each chapter
             novel_content = {
+                **novel_metadata,
                 'title': novel_title,
                 'author': novel_author,
                 'url': novel_url,
@@ -181,103 +168,103 @@ class NovelSpider:
                     'content': content
                 })
                 
-                # 添加延时避免请求过快
+                # Add a delay to avoid sending requests too quickly
                 time.sleep(0.2)
             
             return novel_content
         except Exception as e:
-            print(f"获取小说内容时出错: {e}")
+            print(f"Error retrieving novel content: {e}")
             return {}
 
 
 class NovelSpiderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("爱丽丝书屋小说爬虫 - 简化版")
+        self.root.title("Alice Library Novel Spider - Simple Edition")
         self.root.geometry("800x600")
         
         self.spider = NovelSpider()
-        self.downloaded_files = []  # 记录下载的文件
+        self.downloaded_files = []  # Track downloaded files
         
-        # 创建界面
+        # Build the interface
         self.create_widgets()
     
     def create_widgets(self):
-        # 搜索框架
+        # Search panel
         search_frame = ttk.Frame(self.root)
         search_frame.pack(pady=10, padx=10, fill=tk.X)
         
-        ttk.Label(search_frame, text="搜索关键词:").pack(side=tk.LEFT)
+        ttk.Label(search_frame, text="Search keyword:").pack(side=tk.LEFT)
         
         self.keyword_entry = ttk.Entry(search_frame, width=30)
         self.keyword_entry.pack(side=tk.LEFT, padx=5)
         self.keyword_entry.bind('<Return>', lambda event: self.search_novels())
         
-        ttk.Label(search_frame, text="搜索类型:").pack(side=tk.LEFT, padx=(20, 5))
+        ttk.Label(search_frame, text="Search type:").pack(side=tk.LEFT, padx=(20, 5))
         
-        self.search_type_var = tk.StringVar(value="模糊搜索")
+        self.search_type_var = tk.StringVar(value="Keyword search")
         search_type_combo = ttk.Combobox(
             search_frame, 
             textvariable=self.search_type_var,
-            values=["标题", "作者", "标签", "模糊搜索"],
+            values=["Title", "Author", "Tag", "Keyword search"],
             state="readonly",
-            width=10
+            width=18
         )
         search_type_combo.pack(side=tk.LEFT, padx=5)
         
-        ttk.Button(search_frame, text="搜索", command=self.search_novels).pack(side=tk.LEFT, padx=5)
+        ttk.Button(search_frame, text="Search", command=self.search_novels).pack(side=tk.LEFT, padx=5)
         
-        # 结果框架
+        # Results panel
         result_frame = ttk.Frame(self.root)
         result_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
         
-        # 创建树形视图显示搜索结果
-        columns = ('序号', '标题', '作者', '简介')
+        # Create a tree view for search results
+        columns = ('No.', 'Title', 'Author', 'Synopsis')
         self.tree = ttk.Treeview(result_frame, columns=columns, show='headings', height=10)
         
         for col in columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=150)
         
-        # 添加滚动条
+        # Add a scrollbar
         scrollbar = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
         
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # 按钮框架
+        # Button panel
         button_frame = ttk.Frame(self.root)
         button_frame.pack(pady=10, padx=10, fill=tk.X)
         
-        ttk.Button(button_frame, text="下载选中", command=self.download_selected).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="下载全部", command=self.download_all).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="管理下载", command=self.manage_downloads).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Download Selected", command=self.download_selected).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Download All", command=self.download_all).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Manage Downloads", command=self.manage_downloads).pack(side=tk.LEFT, padx=5)
         
-        # 进度条
+        # Progress bar
         self.progress = ttk.Progressbar(self.root, mode='determinate')
         self.progress.pack(pady=5, padx=10, fill=tk.X)
         
-        # 状态栏
-        self.status_var = tk.StringVar(value="就绪")
+        # Status bar
+        self.status_var = tk.StringVar(value="Ready")
         self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
     
     def search_novels(self):
         keyword = self.keyword_entry.get().strip()
         if not keyword:
-            messagebox.showwarning("警告", "请输入搜索关键词")
+            messagebox.showwarning("Warning", "Please enter a search keyword")
             return
         
-        # 映射搜索类型
-        type_map = {"标题": "title", "作者": "author", "标签": "tag", "模糊搜索": "_all"}
+        # Map search types
+        type_map = {"Title": "title", "Author": "author", "Tag": "tag", "Keyword search": "_all"}
         search_type = type_map.get(self.search_type_var.get(), "_all")
         
-        self.status_var.set("正在搜索...")
+        self.status_var.set("Searching...")
         self.root.update()
         
         try:
-            # 清空现有结果
+            # Clear existing results
             for item in self.tree.get_children():
                 self.tree.delete(item)
             
@@ -286,27 +273,27 @@ class NovelSpiderApp:
             for i, novel in enumerate(novels, 1):
                 self.tree.insert('', 'end', values=(i, novel['title'], novel['author'], novel['intro']))
             
-            self.status_var.set(f"搜索完成，找到 {len(novels)} 本小说")
+            self.status_var.set(f"Search complete: found {len(novels)} novels")
         except Exception as e:
-            messagebox.showerror("错误", f"搜索失败: {str(e)}")
-            self.status_var.set("搜索失败")
+            messagebox.showerror("Error", f"Search failed: {str(e)}")
+            self.status_var.set("Search failed")
     
     def download_selected(self):
         selected_items = self.tree.selection()
         if not selected_items:
-            messagebox.showwarning("警告", "请先选择要下载的小说")
+            messagebox.showwarning("Warning", "Please select novels to download first")
             return
         
         novels_to_download = []
         for item in selected_items:
             values = self.tree.item(item, 'values')
-            # 迋建一个模拟的novel对象，实际需要重新搜索获取URL
+            # Build a placeholder novel object; search again to retrieve its URL
             keyword = self.keyword_entry.get().strip()
-            type_map = {"标题": "title", "作者": "author", "标签": "tag", "模糊搜索": "_all"}
+            type_map = {"Title": "title", "Author": "author", "Tag": "tag", "Keyword search": "_all"}
             search_type = type_map.get(self.search_type_var.get(), "_all")
             
             novels = self.spider.search_novels(keyword, search_type)
-            # 根据序号找到对应的小说
+            # Find the novel matching the result number
             idx = int(values[0]) - 1
             if 0 <= idx < len(novels):
                 novels_to_download.append(novels[idx])
@@ -317,12 +304,12 @@ class NovelSpiderApp:
     def download_all(self):
         all_items = self.tree.get_children()
         if not all_items:
-            messagebox.showwarning("警告", "没有可下载的小说")
+            messagebox.showwarning("Warning", "No novels available to download")
             return
         
         novels_to_download = []
         keyword = self.keyword_entry.get().strip()
-        type_map = {"标题": "title", "作者": "author", "标签": "tag", "模糊搜索": "_all"}
+        type_map = {"Title": "title", "Author": "author", "Tag": "tag", "Keyword search": "_all"}
         search_type = type_map.get(self.search_type_var.get(), "_all")
         
         novels = self.spider.search_novels(keyword, search_type)
@@ -344,34 +331,37 @@ class NovelSpiderApp:
             self.progress['value'] = 0
             
             for i, novel in enumerate(novels_list):
-                self.status_var.set(f"正在下载第 {i+1}/{total} 本: {novel['title']}")
+                self.status_var.set(f"Downloading novel {i+1}/{total}: {novel['title']}")
                 self.root.update()
                 
-                novel_data = self.spider.get_novel_content_by_url(novel['url'], novel['title'], novel['author'])
+                novel_data = self.spider.get_novel_content_by_url(
+                    novel['url'], novel['title'], novel['author'], metadata=novel
+                )
                 
                 if novel_data:
-                    # 获取系统下载目录
+                    # Get the system Downloads directory
                     download_path = os.path.join(os.path.expanduser("~"), "Downloads")
                     if not os.path.exists(download_path):
                         download_path = os.path.join(os.path.expanduser("~"), "Download")
                         if not os.path.exists(download_path):
-                            download_path = os.getcwd()  # 回退到当前目录
+                            download_path = os.getcwd()  # Fall back to the current directory
                     
-                    # 保存文件
+                    # Save the file
                     clean_title = "".join(c for c in novel_data['title'] if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
                     if not clean_title:
-                        clean_title = "未知小说"
+                        clean_title = "Unknown Novel"
                     
                     filename = os.path.join(download_path, f"{clean_title}.txt")
                     
                     with open(filename, 'w', encoding='utf-8') as f:
-                        f.write(f"小说标题: {novel_data['title']}\n")
-                        f.write(f"作者: {novel_data['author']}\n")
-                        f.write(f"网址: {novel_data['url']}\n")
+                        f.write(f"Novel title: {novel_data['title']}\n")
+                        f.write(f"Author: {novel_data['author']}\n")
+                        f.write(f"URL: {novel_data['url']}\n")
+                        f.write(format_novel_metadata(novel_data))
                         f.write("="*50 + "\n\n")
                         
-                        for chapter in novel_data['chapters']:
-                            f.write(f"章节: {chapter['title']}\n")
+                        for chapter_number, chapter in enumerate(novel_data['chapters'], start=1):
+                            f.write(f"Chapter {chapter_number}: {chapter['title']}\n")
                             f.write("-"*30 + "\n")
                             f.write(f"{chapter['content']}\n\n")
                     
@@ -380,25 +370,25 @@ class NovelSpiderApp:
                 self.progress['value'] = i + 1
                 self.root.update()
             
-            self.status_var.set(f"下载完成! 共下载 {len(novels_list)} 本小说")
-            messagebox.showinfo("完成", f"下载完成!\n共下载 {len(novels_list)} 本小说\n保存在系统下载目录")
+            self.status_var.set(f"Download complete! Downloaded {len(novels_list)} novels")
+            messagebox.showinfo("Complete", f"Download complete!\nDownloaded {len(novels_list)} novels\nSaved in the system Downloads directory")
             
         except Exception as e:
-            messagebox.showerror("错误", f"下载过程中出错: {str(e)}")
+            messagebox.showerror("Error", f"Error during download: {str(e)}")
         finally:
             self.progress['value'] = 0
     
     def manage_downloads(self):
         if not self.downloaded_files:
-            messagebox.showinfo("提示", "暂无下载记录")
+            messagebox.showinfo("Information", "No download history yet")
             return
         
-        # 创建管理窗口
+        # Create the download manager window
         manage_window = tk.Toplevel(self.root)
-        manage_window.title("下载管理")
+        manage_window.title("Download Manager")
         manage_window.geometry("600x400")
         
-        # 创建列表框显示下载文件
+        # Create a list box for downloaded files
         listbox_frame = ttk.Frame(manage_window)
         listbox_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
@@ -412,14 +402,14 @@ class NovelSpiderApp:
         listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # 功能按钮
+        # Action buttons
         btn_frame = ttk.Frame(manage_window)
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
         
         def open_file():
             selection = listbox.curselection()
             if not selection:
-                messagebox.showwarning("警告", "请选择要打开的文件")
+                messagebox.showwarning("Warning", "Please select a file to open")
                 return
             idx = selection[0]
             filepath = self.downloaded_files[idx]
@@ -428,28 +418,28 @@ class NovelSpiderApp:
         def copy_path():
             selection = listbox.curselection()
             if not selection:
-                messagebox.showwarning("警告", "请选择要复制路径的文件")
+                messagebox.showwarning("Warning", "Please select a file to copy its path")
                 return
             idx = selection[0]
             filepath = self.downloaded_files[idx]
             self.root.clipboard_clear()
             self.root.clipboard_append(filepath)
-            messagebox.showinfo("提示", "路径已复制到剪贴板")
+            messagebox.showinfo("Information", "Path copied to the clipboard")
         
         def online_view():
             selection = listbox.curselection()
             if not selection:
-                messagebox.showwarning("警告", "请选择要在线查看的文件")
+                messagebox.showwarning("Warning", "Please select a file to view")
                 return
             idx = selection[0]
             filepath = self.downloaded_files[idx]
-            # 在线查看功能 - 这里只是打开文件
+            # View the downloaded file locally
             with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # 创建文本查看窗口
+            # Create the text viewer window
             viewer = tk.Toplevel(self.root)
-            viewer.title(f"在线查看 - {os.path.basename(filepath)}")
+            viewer.title(f"View Text - {os.path.basename(filepath)}")
             viewer.geometry("700x500")
             
             text_frame = ttk.Frame(viewer)
@@ -461,15 +451,15 @@ class NovelSpiderApp:
             text_widget.configure(yscrollcommand=scrollbar_v.set, xscrollcommand=scrollbar_h.set)
             
             text_widget.insert(tk.END, content)
-            text_widget.config(state=tk.DISABLED)  # 设置为只读
+            text_widget.config(state=tk.DISABLED)  # Set to read-only
             
             text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
             scrollbar_v.pack(side=tk.RIGHT, fill=tk.Y)
             scrollbar_h.pack(side=tk.BOTTOM, fill=tk.X)
         
-        ttk.Button(btn_frame, text="打开文件", command=open_file).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="复制路径", command=copy_path).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="在线查看", command=online_view).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Open File", command=open_file).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Copy Path", command=copy_path).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="View Text", command=online_view).pack(side=tk.LEFT, padx=5)
 
 
 def main():

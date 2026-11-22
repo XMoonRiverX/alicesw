@@ -1,77 +1,81 @@
-# 小说爬虫 - 谷歌插件
+# Novel Spider - Chrome Extension
 
-## 功能说明
+Discover novels on the current page, select the ones you want, and download them as text files.
 
-这是一个谷歌浏览器插件，可以爬取当前页面的小说并选择性保存为txt文件。
+## Supported Website
 
-### 支持的网站
-- 爱丽丝书屋 (https://www.alicesw.com)
+- Alice's Library (https://www.alicesw.com)
 
-## 安装方法
+## Installation
 
-1. 打开 Chrome 浏览器
-2. 进入 `chrome://extensions/`
-3. 开启「开发者模式」
-4. 点击「加载已解压的扩展程序」
-5. 选择 `novel-spider-extension` 文件夹
-6. 插件已安装完成
+The manifest references `popup.html`, but that file is not included in this checkout. The popup interface must be restored before the extension can be used as described below.
 
-## 使用方法
+1. Open Chrome.
+2. Navigate to `chrome://extensions/`.
+3. Enable **Developer mode**.
+4. Click **Load unpacked**.
+5. Select the `novel-spider-extension` directory.
 
-1. 打开包含小说的网页（如爱丽丝书屋）
-2. 点击浏览器右上角的小说爬虫图标
-3. 插件会自动爬取当前页面的小说
-4. 在弹出的面板中选择要下载的小说
-5. 点击「下载选中」按钮
-6. 小说会保存为 txt 文件
+## Usage
 
-## 插件结构
+1. Open a supported novel page or search results page.
+2. Click the Novel Spider icon in the browser toolbar.
+3. The extension automatically scans the current page for novels.
+4. Select the novels to download in the popup.
+5. Click **Download Selected**.
+6. The novels are saved as `.txt` files.
 
-```
+Interface messages and exported metadata labels are in English. Novel titles, author names, and chapter text remain in their original language.
+
+## Extension Structure
+
+```text
 novel-spider-extension/
-├── manifest.json        # 插件配置
-├── background.js        # 后台脚本
-├── content.js           # 内容脚本
-├── popup.html           # 弹出页面
-├── popup.js             # 弹出页面脚本
-└── README.md            # 使用说明
+├── manifest.json        # Extension configuration
+├── background.js        # Background service worker
+├── content.js           # Content script
+├── popup.html           # Popup page (not included)
+├── popup.js             # Popup logic
+└── README.md            # Usage instructions
 ```
 
-## 开发说明
+## Development
 
-### 权限说明
-- `activeTab` - 访问当前激活的标签页
-- `scripting` - 执行脚本
-- `downloads` - 下载文件
+### Permissions
 
-### 扩展功能
+- `activeTab`: access the active tab.
+- `scripting`: execute scripts.
+- `downloads`: save downloaded files.
 
-1. **自动爬取** - 打开插件时自动爬取当前页面的小说
-2. **批量选择** - 支持选择多本小说同时下载
-3. **智能识别** - 自动识别不同网站的小说结构
-4. **一键下载** - 点击按钮即可下载选中的小说
+### Features
 
-### 添加新网站支持
+1. **Automatic scanning**: scan the current page when the popup opens.
+2. **Multiple selection**: download several novels at once.
+3. **Page detection**: recognize supported novel detail and search results pages.
+4. **One-click download**: download selected novels with a single button.
 
-如果需要添加对其他小说网站的支持，可以修改 `content.js` 文件，在其中添加新的网站爬取逻辑。
+### Supporting Additional Websites
 
-## 注意事项
+Add page extraction logic in `content.js` and `popup.js`, and implement the corresponding download handling in `background.js`.
 
-1. 请合理使用，避免频繁请求
-2. 遵守网站的相关协议和法律法规
-3. 仅供学习交流使用
-4. 网站内容版权归原作者所有
+## Responsible Use
 
-## 技术栈
+1. Avoid excessive requests.
+2. Follow the website's terms of use and applicable laws.
+3. Use this extension for learning and research only.
+4. Copyright in downloaded content remains with the original authors.
+
+## Technology
 
 - HTML5
 - CSS3
 - JavaScript
 - Chrome Extension API
 
-## 版本历史
+## Version History
 
 ### v1.0
-- 初始版本
-- 支持爱丽丝书屋
-- 基本爬取和下载功能
+
+- Initial release.
+- Support for Alice's Library.
+- Basic page scanning and novel downloads.

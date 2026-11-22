@@ -2,10 +2,10 @@
 
 let novels = [];
 
-// 爬取小说
+// Extract novels
 function crawlNovels() {
-    document.getElementById('status').textContent = '正在爬取...';
-    document.getElementById('novelList').innerHTML = '<div class="loading">正在爬取页面内容...</div>';
+    document.getElementById('status').textContent = 'Scanning...';
+    document.getElementById('novelList').innerHTML = '<div class="loading">Scanning the page for novels...</div>';
     document.getElementById('downloadBtn').disabled = true;
     
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -14,12 +14,12 @@ function crawlNovels() {
             function: function() {
                 const novels = [];
                 
-                // 爬取爱丽丝书屋的小说
+                // Extract novels from Alice Library
                 if (window.location.hostname === 'www.alicesw.com') {
-                    // 从小说详情页爬取
+                    // Extract from the novel detail page
                     if (window.location.pathname.includes('/novel/')) {
-                        const title = document.querySelector('h1, .novel_title')?.textContent?.trim() || '未知标题';
-                        const author = document.querySelector('a[href*="/search\?q=.*&f=author"]')?.textContent?.trim() || '未知作者';
+                        const title = document.querySelector('h1, .novel_title')?.textContent?.trim() || 'Unknown Title';
+                        const author = document.querySelector('a[href*="/search\?q=.*&f=author"]')?.textContent?.trim() || 'Unknown Author';
                         
                         novels.push({
                             title: title,
@@ -29,13 +29,13 @@ function crawlNovels() {
                         });
                     }
                     
-                    // 从搜索结果页爬取
+                    // Extract from the search results page
                     else if (window.location.pathname.includes('/search')) {
-                        // 尝试多种选择器来匹配小说项
+                        // Try multiple selectors to find novel entries
                         const novelItems = document.querySelectorAll('div[class*="list-group-item"], div[class*="novel-item"], .novel-list > div');
                         
                         if (novelItems.length === 0) {
-                            // 尝试直接查找包含小说信息的元素
+                            // Try finding elements containing novel metadata directly
                             const allElements = document.querySelectorAll('div');
                             allElements.forEach(item => {
                                 const titleElem = item.querySelector('a[href*="/novel/"]');
@@ -43,13 +43,13 @@ function crawlNovels() {
                                     const title = titleElem.textContent.trim();
                                     const url = titleElem.href;
                                     
-                                    // 查找作者信息
-                                    let author = '未知作者';
+                                    // Find author information
+                                    let author = 'Unknown Author';
                                     const authorElem = item.querySelector('a[href*="/search\?q="][href*="&f=author"]');
                                     if (authorElem) {
                                         author = authorElem.textContent.trim();
                                     } else {
-                                        // 尝试其他方式查找作者
+                                        // Try another way to find the author
                                         const textContent = item.textContent;
                                         const authorMatch = textContent.match(/作者：([^\s]+)/);
                                         if (authorMatch) {
@@ -73,7 +73,7 @@ function crawlNovels() {
                                 if (titleElem) {
                                     const title = titleElem.textContent.trim();
                                     const url = titleElem.href;
-                                    const author = authorElem?.textContent?.trim() || '未知作者';
+                                    const author = authorElem?.textContent?.trim() || 'Unknown Author';
                                     
                                     novels.push({
                                         title: title,
@@ -93,21 +93,21 @@ function crawlNovels() {
             if (results && results[0]) {
                 novels = results[0].result;
                 displayNovels(novels);
-                document.getElementById('status').textContent = `找到 ${novels.length} 本小说`;
+                document.getElementById('status').textContent = `Found ${novels.length} novels`;
                 document.getElementById('downloadBtn').disabled = novels.length === 0;
             } else {
-                document.getElementById('status').textContent = '未找到小说';
-                document.getElementById('novelList').innerHTML = '<div class="loading">页面中未找到小说</div>';
+                document.getElementById('status').textContent = 'No novels found';
+                document.getElementById('novelList').innerHTML = '<div class="loading">No novels found on this page</div>';
             }
         });
     });
 }
 
-// 显示小说列表
+// Display the novel list
 function displayNovels(novelList) {
     const novelListElement = document.getElementById('novelList');
     if (novelList.length === 0) {
-        novelListElement.innerHTML = '<div class="loading">未找到小说</div>';
+        novelListElement.innerHTML = '<div class="loading">No novels found</div>';
         return;
     }
     
@@ -116,13 +116,13 @@ function displayNovels(novelList) {
             <input type="checkbox" id="novel-${index}" value="${index}">
             <div>
                 <div class="novel-title">${novel.title}</div>
-                <div class="novel-author">作者: ${novel.author}</div>
+                <div class="novel-author">Author: ${novel.author}</div>
             </div>
         </div>
     `).join('');
 }
 
-// 下载选中的小说
+// Download selected novels
 function downloadSelected() {
     const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
     const selectedNovels = Array.from(selectedCheckboxes).map(checkbox => {
@@ -131,31 +131,31 @@ function downloadSelected() {
     });
     
     if (selectedNovels.length === 0) {
-        document.getElementById('status').textContent = '请选择要下载的小说';
+        document.getElementById('status').textContent = 'Please select novels to download';
         return;
     }
     
-    document.getElementById('status').textContent = `正在下载 ${selectedNovels.length} 本小说...`;
+    document.getElementById('status').textContent = `Downloading ${selectedNovels.length} novels...`;
     
-    // 发送消息给后台脚本下载
+    // Ask the background script to download the novels
     chrome.runtime.sendMessage({
         action: 'downloadNovels',
         novels: selectedNovels
     }, function(response) {
         if (response.success) {
-            document.getElementById('status').textContent = '下载完成！';
+            document.getElementById('status').textContent = 'Download complete!';
         } else {
-            document.getElementById('status').textContent = '下载失败';
+            document.getElementById('status').textContent = 'Download failed';
         }
     });
 }
 
-// 绑定事件
+// Bind event handlers
 document.getElementById('crawlBtn').addEventListener('click', crawlNovels);
 document.getElementById('downloadBtn').addEventListener('click', downloadSelected);
 
-// 初始化
+// Initialize
 window.onload = function() {
-    // 自动爬取当前页面
+    // Automatically scan the current page
     crawlNovels();
 };

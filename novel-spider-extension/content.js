@@ -3,12 +3,12 @@
 function crawlPage() {
     const novels = [];
     
-    // 爬取爱丽丝书屋的小说
+    // Extract novels from Alice Library
     if (window.location.hostname === 'www.alicesw.com') {
-        // 从小说详情页爬取
+        // Extract from the novel detail page
         if (window.location.pathname.includes('/novel/')) {
-            const title = document.querySelector('h1, .novel_title')?.textContent?.trim() || '未知标题';
-            const author = document.querySelector('a[href*="/search\?q=.*&f=author"]')?.textContent?.trim() || '未知作者';
+            const title = document.querySelector('h1, .novel_title')?.textContent?.trim() || 'Unknown Title';
+            const author = document.querySelector('a[href*="/search\?q=.*&f=author"]')?.textContent?.trim() || 'Unknown Author';
             
             novels.push({
                 title: title,
@@ -18,7 +18,7 @@ function crawlPage() {
             });
         }
         
-        // 从搜索结果页爬取
+        // Extract from the search results page
         else if (window.location.pathname.includes('/search')) {
             const novelItems = document.querySelectorAll('.list-group-item');
             novelItems.forEach(item => {
@@ -28,7 +28,7 @@ function crawlPage() {
                 if (titleElem) {
                     const title = titleElem.textContent.trim();
                     const url = titleElem.href;
-                    const author = authorElem?.textContent?.trim() || '未知作者';
+                    const author = authorElem?.textContent?.trim() || 'Unknown Author';
                     
                     novels.push({
                         title: title,
@@ -41,13 +41,13 @@ function crawlPage() {
         }
     }
     
-    // 可以添加其他网站的爬取逻辑
-    // else if (window.location.hostname === '其他网站域名') {
-    //     // 其他网站的爬取逻辑
+    // Add extraction logic for other websites here
+    // else if (window.location.hostname === 'example.com') {
+    //     // Extraction logic for another website
     // }
     
     return novels;
 }
 
-// 暴露给外部调用
+// Expose for external calls
 window.crawlPage = crawlPage;

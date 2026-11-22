@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "小说爬虫",
+  "name": "Novel Spider",
   "version": "1.0",
-  "description": "爬取当前页面的小说并选择性保存",
+  "description": "Find novels on the current page and download selected titles",
   "permissions": [
     "activeTab",
     "scripting",

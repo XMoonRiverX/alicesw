@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+from novel_metadata import format_novel_metadata, parse_search_result
 import urllib.parse
 import time
 import re
@@ -20,10 +21,10 @@ class NovelSpider:
 
     def search_novels(self, keyword, search_type='_all'):
         """
-        搜索小说
-        :param keyword: 搜索关键词
-        :param search_type: 搜索类型 ('title', 'author', 'tag', '_all')
-        :return: 小说列表 [{'title': '', 'url': '', 'author': '', 'intro': ''}]
+        Search for novels
+        :param keyword: Search keyword
+        :param search_type: Search type ('title', 'author', 'tag', '_all')
+        :return: Novel records with full descriptions, metadata, tags, and timestamps
         """
         if search_type == 'tag':
             search_url = f"{self.base_url}/search.html?q={urllib.parse.quote(keyword)}&f=tag"
@@ -41,53 +42,37 @@ class NovelSpider:
             list_items = soup.find_all('div', class_='list-group-item')
             
             for item in list_items:
-                title_elem = item.find('h5').find('a')
-                if title_elem:
-                    title = title_elem.get_text(strip=True)
-                    url = urllib.parse.urljoin(self.base_url, title_elem.get('href'))
-                    
-                    # 提取作者
-                    author_elem = item.find('a', href=re.compile(r'/search\?q=.*&f=author'))
-                    author = author_elem.get_text(strip=True) if author_elem else ""
-                    
-                    # 提取简介
-                    intro_elem = item.find('p', class_='content-txt')
-                    intro = intro_elem.get_text(strip=True) if intro_elem else ""
-                    
-                    novels.append({
-                        'title': title,
-                        'url': url,
-                        'author': author,
-                        'intro': intro
-                    })
+                novel = parse_search_result(item, self.base_url)
+                if novel:
+                    novels.append(novel)
             
             return novels
         except Exception as e:
-            print(f"搜索小说时出错: {e}")
+            print(f"Error searching for novels: {e}")
             return []
 
     def get_novel_chapters(self, novel_url):
         """
-        获取小说的所有章节
-        :param novel_url: 小说详情页URL
-        :return: 章节列表 [{'title': '', 'url': ''}]
+        Retrieve all chapters of a novel
+        :param novel_url: Novel detail page URL
+        :return: List of chapters [{'title': '', 'url': ''}]
         """
         try:
-            # 从novel_url提取小说ID
+            # Extract the novel ID from novel_url
             novel_id_match = re.search(r'/novel/(\d+)\.html', novel_url)
             if novel_id_match:
                 novel_id = novel_id_match.group(1)
-                # 使用章节列表页面URL
+                # Use the chapter-list page URL
                 chapters_url = f"{self.base_url}/other/chapters/id/{novel_id}.html"
             else:
-                # 如果无法提取ID，则使用原来的URL
+                # Use the original URL if the ID cannot be extracted
                 chapters_url = novel_url
 
             response = self.session.get(chapters_url)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 从章节列表页面获取所有章节 - 使用正确的选择器
+            # Retrieve all chapters using the chapter-list page selector
             chapter_links = []
             chapter_elements = soup.select('.mulu_list li a')
             
@@ -99,7 +84,7 @@ class NovelSpider:
                     'url': url
                 })
             
-            # 如果在章节列表页面没有找到章节，尝试从原始小说页面获取
+            # Fall back to the original novel page if the chapter-list page has no chapters
             if not chapter_links:
                 response = self.session.get(novel_url)
                 response.encoding = 'utf-8'
@@ -116,140 +101,137 @@ class NovelSpider:
             
             return chapter_links
         except Exception as e:
-            print(f"获取小说章节时出错: {e}")
+            print(f"Error retrieving chapters: {e}")
             return []
 
     def get_chapter_content(self, chapter_url):
         """
-        获取章节内容
-        :param chapter_url: 章节URL
-        :return: 章节内容
+        Retrieve chapter content
+        :param chapter_url: Chapter URL
+        :return: Chapter content
         """
         try:
             response = self.session.get(chapter_url)
             response.encoding = 'utf-8'
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # 查找内容区域
+            # Find the content container
             content_div = soup.find('div', class_='read-content')
             if not content_div:
-                # 尝试其他可能的选择器
+                # Try alternative selectors
                 content_div = soup.find('div', {'class': re.compile(r'.*read.*content.*')})
             
             if content_div:
-                # 清理内容，移除不需要的标签
+                # Clean up the content by removing unwanted tags
                 for unwanted in content_div(["script", "style", "div.ad", "p.ad", "span.ad"]):
                     unwanted.decompose()
                 
                 content = content_div.get_text(separator='\n', strip=True)
                 return content
             else:
-                return "未能找到章节内容"
+                return "Chapter content not found"
         except Exception as e:
-            print(f"获取章节内容时出错: {e}")
+            print(f"Error retrieving chapter content: {e}")
             return ""
 
     def get_novel_content_by_search(self, keyword, search_type='_all'):
         """
-        通过搜索获取小说内容
-        :param keyword: 搜索关键词
-        :param search_type: 搜索类型
-        :return: 包含小说信息和内容的字典
+        Retrieve novel content by searching
+        :param keyword: Search keyword
+        :param search_type: Search type
+        :return: Dictionary containing novel metadata and content
         """
-        print(f"正在搜索关键词: {keyword}")
+        print(f"Searching for keyword: {keyword}")
         novels = self.search_novels(keyword, search_type)
         
         if not novels:
-            print("未找到相关小说")
+            print("No matching novels found")
             return {}
         
-        # 取第一个结果
+        # Use the first result
         novel = novels[0]
-        print(f"找到小说: {novel['title']}, 作者: {novel['author']}")
+        print(f"Found novel: {novel['title']}, Author: {novel['author']}")
         
-        # 获取章节
+        # Retrieve chapters
         chapters = self.get_novel_chapters(novel['url'])
-        print(f"共找到 {len(chapters)} 个章节")
+        print(f"Found {len(chapters)} chapters")
         
-        # 获取每章内容
+        # Retrieve content for each chapter
         novel_content = {
-            'title': novel['title'],
-            'author': novel['author'],
-            'intro': novel['intro'],
+            **novel,
             'chapters': []
         }
         
         for i, chapter in enumerate(chapters):
-            print(f"正在获取章节: {chapter['title']} ({i+1}/{len(chapters)})")
+            print(f"Retrieving chapter: {chapter['title']} ({i+1}/{len(chapters)})")
             content = self.get_chapter_content(chapter['url'])
             novel_content['chapters'].append({
                 'title': chapter['title'],
                 'content': content
             })
             
-            # 添加延时避免请求过快
+            # Add a delay to avoid sending requests too quickly
             time.sleep(1)
         
         return novel_content
 
     def save_novel_to_file(self, novel_data, filename=None):
         """
-        保存小说到文件
-        :param novel_data: 小说数据
-        :param filename: 文件名
+        Save a novel to a file
+        :param novel_data: Novel data
+        :param filename: Filename
         """
         if not filename:
             filename = f"{novel_data['title']}.txt"
         
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(f"小说标题: {novel_data['title']}\n")
-            f.write(f"作者: {novel_data['author']}\n")
-            f.write(f"简介: {novel_data['intro']}\n")
+            f.write(f"Novel title: {novel_data['title']}\n")
+            f.write(f"Author: {novel_data['author']}\n")
+            f.write(format_novel_metadata(novel_data))
             f.write("="*50 + "\n\n")
-            
-            for chapter in novel_data['chapters']:
-                f.write(f"章节: {chapter['title']}\n")
+            for chapter_number, chapter in enumerate(novel_data['chapters'], start=1):
+                f.write(f"Chapter {chapter_number}: {chapter['title']}\n")
                 f.write("-"*30 + "\n")
                 f.write(f"{chapter['content']}\n\n")
         
-        print(f"小说已保存到: {filename}")
+        print(f"Novel saved to: {filename}")
 
 
 def main():
     spider = NovelSpider()
     
-    print("欢迎使用小说爬虫工具")
-    print("1. 按标题搜索")
-    print("2. 按作者搜索") 
-    print("3. 按标签搜索")
-    print("4. 模糊搜索")
+    print("Welcome to Novel Spider")
+    print("1. Search by title")
+    print("2. Search by author")
+    print("3. Search by tag")
+    print("4. Keyword search")
     
-    choice = input("请选择搜索类型 (1-4): ").strip()
+    choice = input("Choose a search type (1-4): ").strip()
     search_types = {'1': 'title', '2': 'author', '3': 'tag', '4': '_all'}
     search_type = search_types.get(choice, '_all')
     
-    keyword = input("请输入搜索关键词: ").strip()
+    keyword = input("Enter a search keyword: ").strip()
     
     if not keyword:
-        print("关键词不能为空")
+        print("Keyword must not be empty")
         return
     
-    print("\n正在爬取小说内容...")
+    print("\nRetrieving novel content...")
     novel_data = spider.get_novel_content_by_search(keyword, search_type)
     
     if novel_data:
-        print(f"\n成功获取小说: {novel_data['title']}")
-        print(f"章节数量: {len(novel_data['chapters'])}")
+        print(f"\nRetrieved novel: {novel_data['title']}")
+        print(f"Chapters: {len(novel_data['chapters'])}")
         
-        save_choice = input("\n是否保存到文件? (y/n): ").strip().lower()
+        save_choice = input("\nSave to a file? (y/n): ").strip().lower()
         if save_choice == 'y':
-            filename = input("请输入文件名 (默认为小说标题.txt): ").strip()
+            filename = input("Enter a filename (default: novel title.txt): ").strip()
             if not filename:
                 filename = None
             spider.save_novel_to_file(novel_data, filename)
 
     else:
-        print("未能获取到小说内容")
+        print("Could not retrieve novel content")
 
 
 if __name__ == "__main__":

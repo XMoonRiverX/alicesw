@@ -90,7 +90,7 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# 项目特定
+# Project-specific files
 *.html
 *.txt
 !README*.txt
@@ -101,13 +101,13 @@ $RECYCLE.BIN/
 !最终版本*.txt
 *.spec
 
-# 测试文件
+# Test files
 test_*.py
 *_test.py
 
-# 日志文件
+# Log files
 *.log
 
-# 临时文件
+# Temporary files
 *.tmp
 *.temp
